@@ -1,6 +1,6 @@
 # rs-book-capture
 
-Command-line tool for transcribing RuneScape 3 books as wikitext by capturing network packets.
+Command-line tool for transcribing RuneScape 3 books in wikitext format by capturing network packets.
 
 ## Requirements
 * Python 3
