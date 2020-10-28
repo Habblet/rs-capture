@@ -22,4 +22,4 @@ Command-line tool for transcribing RuneScape 3 books in wikitext format by captu
 * A file with the transcript of the book formatted to wikitext should have been generated in the `books` directory
 
 ## Notes
-It's buggy. Perhaps it won't realise the book has been closed. If it hasn't almost instantly found the end of the book when you close it, close the program and try again.
+It's buggy. Perhaps it won't realise the book has been closed. If it hasn't almost instantly found the end of the book when you close it or it gets stuck at any other point for a few seconds, close the program and try again.
