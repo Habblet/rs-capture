@@ -30,25 +30,36 @@ multiple_4 = msg_to_hex('quadruple')
 
 messages = [msg_attempt, msg_fail, msg_success, msg_multiple]
 
-capture = pyshark.LiveCapture(interface=INTERFACE)#, output_file=capfilename)
+capture = pyshark.LiveCapture(interface=INTERFACE, display_filter='not tcp.analysis.retransmission')
 # capture.set_debug()
 
 stream_index = None
 
 data = {'seeds': {}, 'fail': 0, 'success': 0, 'multiple_2': 0, 'multiple_3': 0, 'multiple_4': 0}
 
+log_name = 'master farmer log.json'
+jsonfilename = os.path.join(DIR_THIEV_LOGS, log_name)
+
+if os.path.exists(jsonfilename):
+    jsonFile = open(jsonfilename, "r")
+    data = json.load(jsonFile)
+    jsonFile.close()
+
 try:
     for n,packet in enumerate(capture.sniff_continuously()):
         if n == 0:
             print('Program ready for capture. %sStart pickpocketing.%s' % ('\33[36m', '\33[0m'))
+        if n % 100 == 0:
+            print(n)
         if not hasattr(packet, 'ip') or packet.ip.dst != DST_IP:
             continue
         if hasattr(packet, 'tcp') and hasattr(packet.tcp, 'payload'):
             payload = str(packet.tcp.payload)
-            print(stream_index)
+            # print(stream_index)
             if stream_index is None and any(msg in payload for msg in messages):
                 stream_index = packet.tcp.stream
             if packet.tcp.stream == stream_index and any(msg in payload for msg in messages):
+                temp_data = {'seeds': {}, 'fail': 0, 'success': 0, 'multiple_2': 0, 'multiple_3': 0, 'multiple_4': 0}
                 succ_pos = find_pos(payload, msg_success)
                 for pos in succ_pos:
                     pos += 1
@@ -67,26 +78,41 @@ try:
                         seed_name += payload[pos:pos+3]
                         pos += 3
                     seed_name = bytearray.fromhex(seed_name.replace(':','')).decode().lower()
-                    print(seed_num, seed_name)
-                    if seed_name not in data['seeds']:
-                        data['seeds'][seed_name] = {'cases': 1, 'amount': seed_num}
+                    print(seed_num, seed_name, end='')
+                    if seed_name in data['seeds']:
+                        print('', data['seeds'][seed_name]['cases'], n)
                     else:
-                        data['seeds'][seed_name]['cases'] += 1
-                        data['seeds'][seed_name]['amount'] += seed_num
-                
+                        print('')
+                    if seed_name not in temp_data['seeds']:
+                        temp_data['seeds'][seed_name] = {'cases': 1, 'amount': seed_num}
+                    else:
+                        temp_data['seeds'][seed_name]['cases'] += 1
+                        temp_data['seeds'][seed_name]['amount'] += seed_num
                 mult_pos = find_pos(payload, msg_multiple)
                 for pos in mult_pos:
                     if payload[pos:pos+18].find(multiple_2) != -1:
-                        data['multiple_2'] += 1
+                        temp_data['multiple_2'] += 1
                         continue
                     if payload[pos:pos+18].find(multiple_3) != -1:
-                        data['multiple_3'] += 1
+                        temp_data['multiple_3'] += 1
                         continue
                     if payload[pos:pos+27].find(multiple_4) != -1:
-                        data['multiple_4'] += 1
+                        temp_data['multiple_4'] += 1
                 
+                for seed_name in temp_data['seeds']:
+                    if seed_name in data['seeds']:
+                        data['seeds'][seed_name]['cases'] += temp_data['seeds'][seed_name]['cases']
+                        data['seeds'][seed_name]['amount'] += temp_data['seeds'][seed_name]['amount']
+                    else:
+                        data['seeds'][seed_name] = {
+                            'cases': temp_data['seeds'][seed_name]['cases'],
+                            'amount': temp_data['seeds'][seed_name]['amount']
+                        }
                 data['success'] += len(succ_pos)
                 data['fail'] += payload.count(msg_fail)
+                data['multiple_2'] += temp_data['multiple_2']
+                data['multiple_3'] += temp_data['multiple_3']
+                data['multiple_4'] += temp_data['multiple_4']
 except KeyboardInterrupt:
     print('Closing program manually. Output:\n')
 except:
@@ -96,6 +122,5 @@ finally:
     parsed = json.dumps(data, indent=2)
     print(parsed)
     date = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
-    with open(os.path.join(DIR_THIEV_LOGS, 'master farmer %s.json' % date), 'w') as f:
+    with open(os.path.join(DIR_THIEV_LOGS, log_name), 'w') as f:
         f.write(parsed)
-    exit()
