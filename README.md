@@ -2,10 +2,10 @@
 
 Command-line tool for transcribing RuneScape 3 books in wikitext format by capturing network packets.
 
-1. (Requirements)[#requirements]
-1. (Before starting)[#before-starting]
-1. (Book capture)[#book-capture]
-1. (Master farmer log)[#master-farmer-log]
+1. [Requirements](#requirements)
+1. [Before starting](#before-starting)
+1. [Book capture](#book-capture)
+1. [Master farmer log](#master-farmer-log)
 
 ## Requirements
 * Python 3
