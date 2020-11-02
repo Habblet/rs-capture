@@ -1,6 +1,6 @@
-# rs-book-capture
+# rs-capture
 
-Command-line tool for transcribing RuneScape 3 books in wikitext format by capturing network packets.
+Command-line tool for RuneScape 3 which captures network packets and processes them into a readable format.
 
 1. [Requirements](#requirements)
 1. [Before starting](#before-starting)
