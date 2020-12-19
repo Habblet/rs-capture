@@ -12,15 +12,19 @@ MAX_LINE_PX = 200
 #       unused lines
 LINES_PER_PAGE = 15
 
-PAT_PRE_TITLE = re.compile(b'\x00..\x5d\x52\x5d\x52\x5d\x52\x5d\x52\x00..', re.DOTALL)
+PAT_PRE_TITLE = re.compile(b'\x00..\x5d\x52\x5d\x52\x5d\x52\x5d\x52...', re.DOTALL)
 PAT_PAGE_NUM_ODD = re.compile(b'(\x3e|\x40)\x03.\x00', re.DOTALL)
 PAT_PAGE_START = re.compile(b'\x0a\x01\x5d(\x53|\x55)\x5d(\x53|\x55)\x5d(\x53|\x55)\x5d(\x53|\x55)', re.DOTALL)
 PAT_BOOK_END = re.compile(b'\x5d\x54\x5d\x54\x5d\x54\x5d\x54', re.DOTALL)
 # PAT_BOOK_END = re.compile(b"\x5d(\x53|\x54)\x5d(\x53|\x54)\x5d(\x53|\x54)\x5d(\x53|\x54)", re.DOTALL)
 
-# Gets the width of a string in pixels as it would appear
-# on the screen using the game client
-def get_px_width(line):
+
+def get_px_width(line: str):
+    """Gets the width of a string in pixels, as it would appear on the screen using the game client.
+
+    :param line: The string to measure
+    :return: An integer, the width of the string
+    """
     line_px = 0
     for char in line:
         if char in letters:
@@ -32,12 +36,12 @@ def get_px_width(line):
 
 
 # Decides whether to add a newline based on the last opcodes read
-def addnewln(last_op, vbyte):
+def addnewln(last_op, vbytes):
     if len(last_op) >= 7:
         # print(last_op)
-        if last_op[-7:] in [b'\x00\x00\x03' + vbyte + b'\x03' + vbyte + b'\x80', b'\x00\x00\x03' + vbyte + b'\x03' + vbyte + b'\x81']:
+        if last_op[-7:] in [b"\x00\x00" + vbytes * 2 + b"\x80", b"\x00\x00" + vbytes * 2 + b"\x81"]:
             return b'\n'
-        elif len(last_op) >= 8 and last_op[-8:] in [b'\x00\x00\x03' + vbyte + b'\x80\x03' + vbyte + b'\x81', b'\x00\x00\x03' + vbyte + b'\x81\x03' + vbyte + b'\x81']:
+        elif len(last_op) >= 8 and last_op[-8:] in [b"\x00\x00" + vbytes + b"\x80" + vbytes + b"\x81", b"\x00\x00" + vbytes + b"\x81" + vbytes + b"\x81"]:
             return b'\n'
     return b''
 
@@ -51,9 +55,14 @@ def print_page_num(b):
     except:
         print('Unexpected page number:', b)
 
-# Main function
-def file_to_wikitext(inputFilename, debug=False):
-    inp = open(inputFilename, 'rb')
+
+def file_to_wikitext(input_filename: str, debug=False):
+    """Main function.
+
+    :param input_filename: The path to the .cap file
+    :param debug:
+    """
+    inp = open(input_filename, 'rb')
     end = inp.seek(0, 2)
     inp.seek(0)
     string = b''
@@ -64,26 +73,23 @@ def file_to_wikitext(inputFilename, debug=False):
     bytesread = b''
     start = inp.tell()
     title = b''
-    # mixed_packets = False
-    # contains_index = False
 
     while not re.match(PAT_PRE_TITLE, bytesread):
         inp.seek(start)
         bytesread = inp.read(14)
         # print(bytesread)
         start += 1
-    # if bytesread[-13:-11] == b"\x01\x00":
-    #     mixed_packets = True
-    #     print("Stream contains mixed packets.")
+
+    #inp.read(inp.read(1))
 
     start = inp.tell()
-    PAT_PAGE_FIRST = re.compile(b'\x00\x00.\x03(\xbe|\xc0).\x00', re.DOTALL)
-    bytesread = inp.read(7)
+    PAT_PAGE_FIRST = re.compile(b'\x00.....\x00\x06\x31', re.DOTALL)
+    bytesread = inp.read(9)
     while not re.match(PAT_PAGE_FIRST, bytesread):
-        _ = inp.seek(inp.tell() - 6)
-        bytesread = inp.read(7)
-    vbyte = bytes([bytesread[4]])  # can be 0xC0 or 0xBE
-    _ = inp.seek(inp.tell() - 8)
+        _ = inp.seek(inp.tell() - 8)
+        bytesread = inp.read(9)
+    vbytes = bytesread[3:5]  # can be 0xC0 or 0xBE
+    _ = inp.seek(inp.tell() - 10)
     while True:
         title_byte = inp.read(1)
         title_char = ''
@@ -110,91 +116,92 @@ def file_to_wikitext(inputFilename, debug=False):
     inp.seek(inp.tell() + len(title))
     inp.read(3)
 
-    PAT_PAGE_NUM_EVEN = re.compile(b"\x03" + vbyte + b".\x00", re.DOTALL)
-    PAT_PAGE_END = re.compile(b"(\x19|\x30|\x61)\x03" + vbyte + b".\x00.\x03" + vbyte + b"(\x80|\x81).\x00.\x03" + vbyte + b"(\x80|\x81)...", re.DOTALL)
+    PAT_PAGE_NUM_EVEN = re.compile(vbytes + b".\x00", re.DOTALL)
+    PAT_PAGE_END = re.compile(b"." + vbytes + b".\x00." + vbytes + b"(\x80|\x81).\x00." + vbytes + b"(\x80|\x81)...", re.DOTALL)
 
     start = inp.tell()
     book_end = False
     page_start_found = False
+    found_single_vbytes = False
+    vbyte1 = None
+    vbyte2 = None
 
     while not book_end:
-        b = inp.read(4)
-        page_odd = re.match(PAT_PAGE_NUM_ODD, b) if pages != 0 else re.match(PAT_PAGE_NUM_EVEN, b)
-        if page_odd:
-            page_num_digits = ord(inp.read(1))
-            page_num = None
-            if page_num_digits == 6:
-                page_num = inp.read(1)
-            elif 6 < page_num_digits < 8:
-                page_num = inp.read(page_num_digits - 5)
-            else:
-                print('Unexpected byte for page_num_digits')
+        b = inp.read(1)
+        while b != b"\x00":
+            b = inp.read(1)
+            # print('t',inp.tell())
+        b = inp.read(1)
+        if b == b"\x06":
+            b = inp.read(1)
+            try:
+                _ = int(b)
+                # print(_)
+            except ValueError:
+                inp.seek(inp.tell() - 1)
                 continue
-            print_page_num(page_num)
-            pages += 1
-            page_num = None
-            while not re.match(PAT_PAGE_NUM_EVEN, inp.read(4)):
-                _ = inp.seek(inp.tell() - 3)
-            page_num_digits = ord(inp.read(1))
-            if page_num_digits == 6:
-                page_num = inp.read(1)
-            elif page_num_digits > 6:
-                page_num = inp.read(page_num_digits - 5)
+        elif b == b"\x07":
+            b = inp.read(2)
+            try:
+                _ = int(b)
+                # print(_)
+            except ValueError:
+                inp.seek(inp.tell() - 2)
+                continue
+        elif b in [b"\x5d", b"\x54"]:
+            b = inp.read(7)
+            if b in [b"\x54\x5d\x54\x5d\x54\x5d\x54", b"\x5d\x54\x5d\x54\x5d\x54\x5d"]:
+                print('End found.')
             else:
-                print('Unexpected byte for page_num_digits')
-            print_page_num(page_num)
-            pages += 1
-            while True:
-                op = inp.read(2)
-                if op == b'\x00\x00':
-                    if re.match(PAT_PAGE_END, inp.read(18)):
-                        page_start_bytes = inp.read(10)
-                        while not re.match(PAT_PAGE_START, page_start_bytes):
-                            if re.match(PAT_BOOK_END, page_start_bytes):
-                                book_end = True
-                                break
-                            _ = inp.seek(inp.tell() - 9)
-                            page_start_bytes = inp.read(10)
-                        if string[-1] != ord('\n'):
-                            pass
-                            string += b"\n"
+                inp.seek(inp.tell() - 7)
+                continue
+        else:
+            continue
+        inp.read(3)
+        while not re.match(PAT_PAGE_NUM_EVEN, inp.read(4)):
+            _ = inp.seek(inp.tell() - 3)
+        page_num_digits = ord(inp.read(1))
+        if page_num_digits == 6:
+            page_num = inp.read(1)
+        elif page_num_digits > 6:
+            page_num = inp.read(page_num_digits - 5)
+        else:
+            print('Unexpected byte for page_num_digits')
+        inp.read(7)
+        line_chars_num = inp.read(1)[0] - 5
+        string += inp.read(line_chars_num)
+        page_start_found = False
+        while not book_end and not page_start_found:
+            bytesread = inp.read(13)
+            if vbyte2 is None:
+                vbyte2 = bytesread[8:11]
+            line_chars_num = inp.read(1)[0] - 5
+            possible_string = inp.read(line_chars_num)
+            try:
+                possible_string.decode(ENCODING)
+                # print('OK',inp.tell(),possible_string)
+                string += b"\n" + possible_string
+            except UnicodeDecodeError:
+                #print('pos:',possible_string)
+                #print('br',bytesread[:10])
+                _ = inp.seek(inp.tell() - line_chars_num - 4)
+                page_start_bytes = bytesread[:10]
+                while not re.match(PAT_PAGE_START, page_start_bytes):
+                    #print('start',page_start_bytes)
+                    if re.match(PAT_BOOK_END, page_start_bytes):
                         page_start_found = True
+                        book_end = True
+                        print('end found')
                         break
-                    else:
-                        _ = inp.seek(inp.tell() - 18)
-                        last_op += op
-                        _ = inp.read(1)
-                elif op == b'\x03' + vbyte:
-                    op = inp.read(1)
-                    if op in [b'\x80', b'\x81']:
-                        # Handles bytes found before some images
-                        inp.read(1)
-                        pre_img_bytes = inp.read(2)
-                        if pre_img_bytes == b'\xbe\x03':
-                            inp.read(17)
-                        else:
-                            inp.seek(inp.tell() - 3)
-                            last_op += b'\x03' + vbyte + op
-                            if not page_start_found:
-                                string += addnewln(last_op, vbyte)
-                            if inp.read(1) != b'\x00':
-                                _ = inp.read(2)
-                            else:
-                                if inp.read(1) == b'\x00':
-                                    _ = inp.read(1)
-                    else:
-                        last_op += b"\x03" + vbyte
-                        _ = inp.read(2)
-                else:
-                    page_start_found = False
-                    _ = inp.seek(inp.tell() - 2)
-                    string += inp.read(1)
-                if (inp.tell() + 50) > end:
-                    break
+                    _ = inp.seek(inp.tell() - 9)
+                    page_start_bytes = inp.read(10)
+                string += b"\n"
+                page_start_found = True
         if (inp.tell() + 50) > end:
             break
-        _ = inp.seek(inp.tell() - 3)
-
+        _ = inp.seek(inp.tell() - 1)
+    
+    # print(string)
     text = string.decode(ENCODING).strip()
 
     # print(text)
@@ -265,6 +272,7 @@ def file_to_wikitext(inputFilename, debug=False):
     with open(os.path.join(DIR_BOOKS, outputFilename), 'w') as out:
         out.write(text.strip())
     print('\nSneak peek:\n\n' + text.strip()[:200] + '...')
+
 
 if __name__ == '__main__':
     file_to_wikitext(sys.argv[1], debug=True)
